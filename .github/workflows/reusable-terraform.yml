@@ -22,15 +22,7 @@ on:
         type: string
         default: "true"
     secrets:
-      WIF_PROVIDER_S:
-        required: true
-      CICD_SA_EMAIL_S:
-        required: true
-      GCP_PROJECT_ID_S:
-        required: true
-      TFSTATE_BUCKET_S:
-        required: true
-      TF_VARS_S:
+      TF_VARS:
         required: false
 
 jobs:
@@ -48,8 +40,8 @@ jobs:
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ secrets.WIF_PROVIDER_S }}
-          service_account: ${{ secrets.CICD_SA_EMAIL_S }}
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.CICD_SA_EMAIL }}
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -58,7 +50,7 @@ jobs:
 
       - name: Write tfvars
         if: ${{ inputs.has_tfvars == 'true' }}
-        run: echo "${{ secrets.TF_VARS_S }}" > terraform.tfvars
+        run: echo "${{ secrets.TF_VARS }}" > terraform.tfvars
         working-directory: ${{ inputs.working_directory }}
 
       - name: Terraform Init
@@ -66,7 +58,7 @@ jobs:
         working-directory: ${{ inputs.working_directory }}
         run: |
           terraform init \
-            -backend-config="bucket=${{ secrets.TFSTATE_BUCKET_S }}" \
+            -backend-config="bucket=${{ secrets.TFSTATE_BUCKET }}" \
             -backend-config="prefix=${{ inputs.state_prefix }}"
 
       - name: Terraform Validate
