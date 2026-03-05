@@ -59,8 +59,10 @@ jobs:
 
       - name: Write tfvars
         if: ${{ inputs.has_tfvars == 'true' }}
-        run: echo "${{ secrets.TF_VARS }}" > terraform.tfvars
-        working-directory: ${{ inputs.working_directory }}
+        run: |
+            cat <<EOF > terraform.tfvars
+            ${{ secrets.TF_VARS }}
+            EOF
 
       - name: Terraform Init
         id: init
