@@ -24,6 +24,12 @@ on:
     secrets:
       TF_VARS:
         required: false
+      WIF_PROVIDER:
+        required: true
+      CICD_SA_EMAIL:
+        required: true
+      TFSTATE_BUCKET:
+        required: true
 
 jobs:
   terraform:
