@@ -1,0 +1,121 @@
+name: Reusable Terraform Workflow
+
+on:
+  workflow_call:
+    inputs:
+      working_directory:
+        description: "Path to Terraform root"
+        required: true
+        type: string
+      state_prefix:
+        description: "GCS state prefix (e.g. infra, killswitch)"
+        required: true
+        type: string
+      environment:
+        description: "Deployment environment"
+        required: false
+        type: string
+        default: "production"
+    secrets:
+      WIF_PROVIDER:
+        required: true
+      CICD_SA_EMAIL:
+        required: true
+      GCP_PROJECT_ID:
+        required: true
+      TFSTATE_BUCKET:
+        required: true
+      TF_VARS:
+        required: false
+
+jobs:
+  terraform:
+    name: Terraform ${{ inputs.state_prefix }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout calling repo
+        uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.CICD_SA_EMAIL }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.0"
+
+      - name: Write tfvars
+        if: ${{ secrets.TF_VARS != '' }}
+        run: echo "${{ secrets.TF_VARS }}" > terraform.tfvars
+        working-directory: ${{ inputs.working_directory }}
+
+      - name: Terraform Init
+        id: init
+        working-directory: ${{ inputs.working_directory }}
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ secrets.TFSTATE_BUCKET }}" \
+            -backend-config="prefix=${{ inputs.state_prefix }}"
+
+      - name: Terraform Validate
+        id: validate
+        working-directory: ${{ inputs.working_directory }}
+        run: terraform validate
+
+      - name: Terraform Plan
+        id: plan
+        working-directory: ${{ inputs.working_directory }}
+        run: |
+          terraform plan \
+            -out=tfplan \
+            -no-color \
+            2>&1 | tee plan_output.txt
+        continue-on-error: true
+
+      - name: Post Plan as PR Comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const plan = fs.readFileSync('${{ inputs.working_directory }}/plan_output.txt', 'utf8');
+            const truncated = plan.length > 60000 ? plan.substring(0, 60000) + '\n... (truncated)' : plan;
+            const body = `## Terraform Plan — \`${{ inputs.state_prefix }}\`
+            \`\`\`hcl
+            ${truncated}
+            \`\`\`
+            **Validate:** \`${{ steps.validate.outcome }}\`
+            **Plan:** \`${{ steps.plan.outcome }}\`
+            `;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
+
+      - name: Fail if plan failed
+        if: steps.plan.outcome == 'failure'
+        run: exit 1
+
+      - name: Upload plan artifact
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-${{ inputs.state_prefix }}
+          path: ${{ inputs.working_directory }}/tfplan
+          retention-days: 1
+
+      - name: Terraform Apply
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        working-directory: ${{ inputs.working_directory }}
+        run: terraform apply -auto-approve tfplan
