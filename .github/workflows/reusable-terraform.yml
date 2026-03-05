@@ -40,8 +40,8 @@ jobs:
     environment: ${{ inputs.environment }}
     permissions:
       contents: read
-      id-token: write
-      pull-requests: write
+      id-token: read
+      pull-requests: read
 
     steps:
       - name: Checkout calling repo
