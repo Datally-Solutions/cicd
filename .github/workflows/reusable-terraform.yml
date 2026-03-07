@@ -23,6 +23,10 @@ on:
         required: false
         type: string
         default: "true"
+      extra_vars:
+        required: false
+        default: ""
+        type: string
     secrets:
       TF_VARS:
         required: false
@@ -87,6 +91,7 @@ jobs:
             -input=false \
             -out=tfplan \
             -no-color \
+            ${{ inputs.extra_vars }} \
             2>&1 | tee plan_output.txt
         continue-on-error: true
 
