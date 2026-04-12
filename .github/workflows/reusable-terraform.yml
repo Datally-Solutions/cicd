@@ -74,8 +74,10 @@ jobs:
 
       - name: Write tfvars
         if: inputs.has_tfvars
+        env:
+          WORKING_DIR: ${{ inputs.working_directory }}
         run: |
-          cat <<'EOF' > ${{ inputs.working_directory }}/terraform.tfvars
+          cat <<'EOF' > "$WORKING_DIR/terraform.tfvars"
           ${{ secrets.TF_VARS }}
           EOF
 
@@ -109,13 +111,16 @@ jobs:
           TF_VAR_GCP_REGION: ${{ secrets.GCP_REGION }}
           EXTRA_VARS: ${{ inputs.extra_vars }}
         run: |
-          # EXTRA_VARS is intentionally word-split here to allow multiple -var flags
-          # shellcheck disable=SC2086
+          # Split EXTRA_VARS into an array to avoid unquoted word-split injection
+          extra_args=()
+          if [[ -n "$EXTRA_VARS" ]]; then
+            read -ra extra_args <<< "$EXTRA_VARS"
+          fi
           terraform plan \
             -input=false \
             -out=tfplan \
             -no-color \
-            ${EXTRA_VARS:+$EXTRA_VARS} \
+            "${extra_args[@]}" \
             2>&1 | tee plan_output.txt
         continue-on-error: true
 
@@ -171,4 +176,6 @@ jobs:
 
       - name: Cleanup tfvars
         if: always() && inputs.has_tfvars
-        run: rm -f ${{ inputs.working_directory }}/terraform.tfvars
+        env:
+          WORKING_DIR: ${{ inputs.working_directory }}
+        run: rm -f "$WORKING_DIR/terraform.tfvars"
