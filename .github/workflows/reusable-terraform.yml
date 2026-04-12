@@ -1,7 +1,9 @@
 name: Reusable Terraform Workflow
+
 env:
-    TF_VAR_GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-    TF_VAR_GCP_REGION: ${{ secrets.GCP_REGION }}
+  TF_VAR_GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  TF_VAR_GCP_REGION: ${{ secrets.GCP_REGION }}
+
 on:
   workflow_call:
     inputs:
@@ -10,7 +12,7 @@ on:
         required: true
         type: string
       state_prefix:
-        description: "GCS state prefix (e.g. infra, killswitch)"
+        description: "GCS state prefix (e.g. infra, backend)"
         required: true
         type: string
       environment:
@@ -24,9 +26,15 @@ on:
         type: string
         default: "true"
       extra_vars:
+        description: "Extra -var flags passed to terraform plan"
         required: false
-        default: ""
         type: string
+        default: ""
+      terraform_version:
+        description: "Terraform version to install"
+        required: false
+        type: string
+        default: "1.7.0"
     secrets:
       TF_VARS:
         required: false
@@ -61,27 +69,33 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "1.7.0"
+          terraform_version: ${{ inputs.terraform_version }}
 
       - name: Write tfvars
-        if: ${{ inputs.has_tfvars == 'true' }}
+        if: inputs.has_tfvars == 'true'
         run: |
-            cat <<EOF > terraform.tfvars
-            ${{ secrets.TF_VARS }}
-            EOF
+          cat <<EOF > terraform.tfvars
+          ${{ secrets.TF_VARS }}
+          EOF
 
       - name: Terraform Init
-        id: init
         working-directory: ${{ inputs.working_directory }}
         run: |
           terraform init \
             -backend-config="bucket=${{ secrets.TFSTATE_BUCKET }}" \
             -backend-config="prefix=${{ inputs.state_prefix }}"
 
+      - name: Terraform Format Check
+        id: fmt
+        working-directory: ${{ inputs.working_directory }}
+        run: terraform fmt -check -recursive
+        continue-on-error: true
+
       - name: Terraform Validate
         id: validate
         working-directory: ${{ inputs.working_directory }}
         run: terraform validate
+        continue-on-error: true
 
       - name: Terraform Plan
         id: plan
@@ -103,13 +117,21 @@ jobs:
             const fs = require('fs');
             const plan = fs.readFileSync('${{ inputs.working_directory }}/plan_output.txt', 'utf8');
             const truncated = plan.length > 60000 ? plan.substring(0, 60000) + '\n... (truncated)' : plan;
+            const icon = (outcome) => outcome === 'success' ? '✅' : outcome === 'failure' ? '❌' : '⚠️';
             const body = `## Terraform Plan — \`${{ inputs.state_prefix }}\`
+
+            | Step | Result |
+            |------|--------|
+            | Format | ${icon('${{ steps.fmt.outcome }}')} \`${{ steps.fmt.outcome }}\` |
+            | Validate | ${icon('${{ steps.validate.outcome }}')} \`${{ steps.validate.outcome }}\` |
+            | Plan | ${icon('${{ steps.plan.outcome }}')} \`${{ steps.plan.outcome }}\` |
+
+            <details><summary>Plan output</summary>
+
             \`\`\`hcl
             ${truncated}
             \`\`\`
-            **Validate:** \`${{ steps.validate.outcome }}\`
-            **Plan:** \`${{ steps.plan.outcome }}\`
-            `;
+            </details>`;
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
@@ -117,8 +139,8 @@ jobs:
               body
             });
 
-      - name: Fail if plan failed
-        if: steps.plan.outcome == 'failure'
+      - name: Fail if fmt, validate, or plan failed
+        if: steps.fmt.outcome == 'failure' || steps.validate.outcome == 'failure' || steps.plan.outcome == 'failure'
         run: exit 1
 
       - name: Upload plan artifact
