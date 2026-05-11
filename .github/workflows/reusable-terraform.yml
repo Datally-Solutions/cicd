@@ -16,13 +16,13 @@ on:
         required: false
         type: string
         default: "production"
-      has_tfvars:
-        description: "Whether to write TF_VARS secret to terraform.tfvars"
+      ingest_token_sm_secret:
+        description: "Nom du secret SM pour TF_VAR_ingest_token (laisser vide si non requis)"
         required: false
-        type: boolean
-        default: true
+        type: string
+        default: ""
       extra_vars:
-        description: "Extra -var flags passed to terraform plan (space-separated)"
+        description: "Extra -var flags passed to terraform plan (space-separated, non-sensitive only)"
         required: false
         type: string
         default: ""
@@ -31,19 +31,10 @@ on:
         required: false
         type: string
         default: "1.10.3"
-    secrets:
-      TF_VARS:
-        required: false
-      WIF_PROVIDER:
-        required: true
-      CICD_SA_EMAIL:
-        required: true
-      TFSTATE_BUCKET:
-        required: true
-      GCP_PROJECT_ID:
-        required: true
-      GCP_REGION:
-        required: true
+
+# Valeurs partagées non-sensibles via variables d'organisation GitHub (vars.*) :
+#   WIF_PROVIDER, CICD_SA_EMAIL, GCP_PROJECT_ID, GCP_REGION, TFSTATE_BUCKET, ALERT_EMAIL
+# Valeurs sensibles via Secret Manager, fetchées après auth WIF (ingest_token_sm_secret, etc.)
 
 permissions:
   contents: read
@@ -67,31 +58,36 @@ jobs:
         uses: google-github-actions/auth@v2
         with:
           token_format: "access_token"
-          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
-          service_account: ${{ secrets.CICD_SA_EMAIL }}
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.CICD_SA_EMAIL }}
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ inputs.terraform_version }}
 
-      - name: Write tfvars
-        if: inputs.has_tfvars
+      - name: Fetch ingest_token from Secret Manager
+        if: inputs.ingest_token_sm_secret != ''
+        id: sm
+        uses: google-github-actions/get-secretmanager-secrets@v2
+        with:
+          secrets: |
+            ingest_token:${{ vars.GCP_PROJECT_ID }}/${{ inputs.ingest_token_sm_secret }}
+
+      - name: Export ingest_token as TF var
+        if: inputs.ingest_token_sm_secret != '' && steps.sm.outputs.ingest_token != ''
         env:
-          WORKING_DIR: ${{ inputs.working_directory }}
-        run: |
-          cat <<'EOF' > "$WORKING_DIR/terraform.tfvars"
-          ${{ secrets.TF_VARS }}
-          EOF
+          _val: ${{ steps.sm.outputs.ingest_token }}
+        run: echo "TF_VAR_ingest_token=$_val" >> "$GITHUB_ENV"
 
       - name: Terraform Init
         working-directory: ${{ inputs.working_directory }}
         env:
-          TF_VAR_GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-          TF_VAR_GCP_REGION: ${{ secrets.GCP_REGION }}
+          TF_VAR_GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          TF_VAR_GCP_REGION: ${{ vars.GCP_REGION }}
         run: |
           terraform init \
-            -backend-config="bucket=${{ secrets.TFSTATE_BUCKET }}" \
+            -backend-config="bucket=${{ vars.TFSTATE_BUCKET }}" \
             -backend-config="prefix=${{ inputs.state_prefix }}"
 
       - name: Terraform Format Check
@@ -110,11 +106,11 @@ jobs:
         id: plan
         working-directory: ${{ inputs.working_directory }}
         env:
-          TF_VAR_GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-          TF_VAR_GCP_REGION: ${{ secrets.GCP_REGION }}
+          TF_VAR_GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          TF_VAR_GCP_REGION: ${{ vars.GCP_REGION }}
+          TF_VAR_alert_email: ${{ vars.ALERT_EMAIL }}
           EXTRA_VARS: ${{ inputs.extra_vars }}
         run: |
-          # Split EXTRA_VARS into an array to avoid unquoted word-split injection
           extra_args=()
           if [[ -n "$EXTRA_VARS" ]]; then
             read -ra extra_args <<< "$EXTRA_VARS"
@@ -173,12 +169,7 @@ jobs:
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         working-directory: ${{ inputs.working_directory }}
         env:
-          TF_VAR_GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-          TF_VAR_GCP_REGION: ${{ secrets.GCP_REGION }}
+          TF_VAR_GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          TF_VAR_GCP_REGION: ${{ vars.GCP_REGION }}
+          TF_VAR_alert_email: ${{ vars.ALERT_EMAIL }}
         run: terraform apply -auto-approve tfplan
-
-      - name: Cleanup tfvars
-        if: always() && inputs.has_tfvars
-        env:
-          WORKING_DIR: ${{ inputs.working_directory }}
-        run: rm -f "$WORKING_DIR/terraform.tfvars"
