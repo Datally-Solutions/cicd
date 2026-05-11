@@ -45,6 +45,9 @@ on:
       GCP_REGION:
         required: true
 
+permissions:
+  contents: read
+
 jobs:
   terraform:
     name: Terraform ${{ inputs.state_prefix }}
