@@ -1,0 +1,33 @@
+name: Reusable Firebase Deploy
+
+on:
+  workflow_call:
+    inputs:
+      targets:
+        description: "Cibles Firebase (ex: firestore:rules,firestore:indexes)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  firebase:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: Datally-Solutions/cicd/.github/actions/gcp-auth@main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - run: npm install -g firebase-tools
+
+      - run: firebase deploy --only ${{ inputs.targets }}

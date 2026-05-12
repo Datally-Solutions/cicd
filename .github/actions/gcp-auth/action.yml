@@ -1,0 +1,26 @@
+name: GCP Authenticate
+description: Authenticate to GCP via Workload Identity Federation
+
+inputs:
+  token_format:
+    description: "Format du token (access_token ou vide)"
+    required: false
+    default: ""
+
+outputs:
+  project_id:
+    description: "GCP Project ID"
+    value: "cat-litter-monitor"
+  access_token:
+    description: "GCP access token (si token_format=access_token)"
+    value: ${{ steps.auth.outputs.access_token }}
+
+runs:
+  using: composite
+  steps:
+    - uses: google-github-actions/auth@v2
+      id: auth
+      with:
+        token_format: ${{ inputs.token_format }}
+        workload_identity_provider: "projects/853335570767/locations/global/workloadIdentityPools/github-pool/providers/github-provider"
+        service_account: "terraform-cicd-sa@cat-litter-monitor.iam.gserviceaccount.com"

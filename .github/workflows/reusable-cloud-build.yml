@@ -1,0 +1,44 @@
+name: Reusable Cloud Build
+
+on:
+  workflow_call:
+    inputs:
+      config_path:
+        description: "Chemin vers le fichier cloudbuild YAML"
+        required: true
+        type: string
+      region:
+        required: false
+        type: string
+        default: "europe-west9"
+      short_sha:
+        description: "SHA court à passer en substitution SHORT_SHA"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  cloud-build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        id: gcp
+        uses: Datally-Solutions/cicd/.github/actions/gcp-auth@main
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Submit Cloud Build
+        run: |
+          gcloud builds submit . \
+            --config=${{ inputs.config_path }} \
+            --project=${{ steps.gcp.outputs.project_id }} \
+            --region=${{ inputs.region }} \
+            --substitutions=SHORT_SHA=${{ inputs.short_sha }}

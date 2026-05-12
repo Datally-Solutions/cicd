@@ -1,0 +1,59 @@
+name: Reusable Firmware Upload (GCS)
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Version du firmware (tag ou short SHA)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      FIRMWARE_BUCKET: "cat-litter-monitor-firmware"
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: firmware
+
+      - name: Authenticate to GCP
+        id: gcp
+        uses: Datally-Solutions/cicd/.github/actions/gcp-auth@main
+        with:
+          token_format: "access_token"
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Upload versioned firmware
+        uses: google-github-actions/upload-cloud-storage@v2
+        with:
+          path: firmware.bin
+          destination: ${{ env.FIRMWARE_BUCKET }}/${{ inputs.version }}
+          process_gcloudignore: false
+
+      - name: Upload latest firmware (no compression)
+        run: |
+          gsutil -h "Content-Type:application/octet-stream" \
+                 -h "Content-Encoding:identity" \
+                 cp firmware.bin \
+                 gs://${{ env.FIRMWARE_BUCKET }}/latest/firmware.bin
+
+      - name: Generate and upload latest.json
+        run: |
+          cat > latest.json << EOF
+          {
+            "version": "${{ inputs.version }}",
+            "url": "https://storage.googleapis.com/${{ env.FIRMWARE_BUCKET }}/latest/firmware.bin",
+            "built_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF
+          gsutil cp latest.json gs://${{ env.FIRMWARE_BUCKET }}/latest.json

@@ -51,9 +51,6 @@ jobs:
     # La sécurité vient de WIF + IAM, pas de la confidentialité de ces strings.
     # -------------------------------------------------------
     env:
-      WIF_PROVIDER:   "projects//locations/global/workloadIdentityPools/github-pool/providers/github-provider"
-      CICD_SA_EMAIL:  "terraform-cicd-sa@cat-litter-monitor.iam.gserviceaccount.com"
-      GCP_PROJECT_ID: "cat-litter-monitor"
       GCP_REGION:     "europe-west9"
       TFSTATE_BUCKET: "cat-litter-monitor-tfstate"
       ALERT_EMAIL:    "leqsiouer.mehdi@outlook.com"
@@ -63,11 +60,8 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Authenticate to GCP
-        uses: google-github-actions/auth@v2
-        with:
-          token_format: "access_token"
-          workload_identity_provider: ${{ env.WIF_PROVIDER }}
-          service_account: ${{ env.CICD_SA_EMAIL }}
+        id: gcp
+        uses: Datally-Solutions/cicd/.github/actions/gcp-auth@main
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -80,7 +74,7 @@ jobs:
         uses: google-github-actions/get-secretmanager-secrets@v2
         with:
           secrets: |
-            ingest_token:${{ env.GCP_PROJECT_ID }}/${{ inputs.ingest_token_sm_secret }}
+            ingest_token:${{ steps.gcp.outputs.project_id }}/${{ inputs.ingest_token_sm_secret }}
 
       - name: Export ingest_token as TF var
         if: inputs.ingest_token_sm_secret != '' && steps.sm.outputs.ingest_token != ''
@@ -91,7 +85,7 @@ jobs:
       - name: Terraform Init
         working-directory: ${{ inputs.working_directory }}
         env:
-          TF_VAR_GCP_PROJECT_ID: ${{ env.GCP_PROJECT_ID }}
+          TF_VAR_GCP_PROJECT_ID: ${{ steps.gcp.outputs.project_id }}
           TF_VAR_GCP_REGION: ${{ env.GCP_REGION }}
         run: |
           terraform init \
@@ -114,7 +108,7 @@ jobs:
         id: plan
         working-directory: ${{ inputs.working_directory }}
         env:
-          TF_VAR_GCP_PROJECT_ID: ${{ env.GCP_PROJECT_ID }}
+          TF_VAR_GCP_PROJECT_ID: ${{ steps.gcp.outputs.project_id }}
           TF_VAR_GCP_REGION: ${{ env.GCP_REGION }}
           TF_VAR_alert_email: ${{ env.ALERT_EMAIL }}
           EXTRA_VARS: ${{ inputs.extra_vars }}
@@ -177,7 +171,7 @@ jobs:
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         working-directory: ${{ inputs.working_directory }}
         env:
-          TF_VAR_GCP_PROJECT_ID: ${{ env.GCP_PROJECT_ID }}
+          TF_VAR_GCP_PROJECT_ID: ${{ steps.gcp.outputs.project_id }}
           TF_VAR_GCP_REGION: ${{ env.GCP_REGION }}
           TF_VAR_alert_email: ${{ env.ALERT_EMAIL }}
         run: terraform apply -auto-approve tfplan
