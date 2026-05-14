@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       config_path:
-        description: "Chemin vers le fichier cloudbuild YAML"
+        description: "Path to the cloudbuild YAML file"
         required: true
         type: string
       region:
@@ -12,7 +12,7 @@ on:
         type: string
         default: "europe-west9"
       short_sha:
-        description: "SHA court à passer en substitution SHORT_SHA"
+        description: "Short SHA to pass as SHORT_SHA substitution"
         required: true
         type: string
 

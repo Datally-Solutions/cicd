@@ -17,7 +17,7 @@ on:
         type: string
         default: "production"
       ingest_token_sm_secret:
-        description: "Nom du secret SM pour TF_VAR_ingest_token (laisser vide si non requis)"
+        description: "SM secret name for TF_VAR_ingest_token (leave empty if not required)"
         required: false
         type: string
         default: ""
@@ -47,8 +47,8 @@ jobs:
       pull-requests: write
 
     # -------------------------------------------------------
-    # Config GCP — valeurs non-sensibles, hardcodées ici.
-    # La sécurité vient de WIF + IAM, pas de la confidentialité de ces strings.
+    # GCP config — non-sensitive values, hardcoded here.
+    # Security comes from WIF + IAM, not the confidentiality of these strings.
     # -------------------------------------------------------
     env:
       GCP_REGION:     "europe-west9"
