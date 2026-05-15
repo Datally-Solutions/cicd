@@ -21,6 +21,16 @@ on:
         required: false
         type: string
         default: ""
+      firmware_check_token_sm_secret:
+        description: "SM secret name for TF_VAR_firmware_check_token (leave empty if not required)"
+        required: false
+        type: string
+        default: ""
+      device_logs_token_sm_secret:
+        description: "SM secret name for TF_VAR_device_logs_token (leave empty if not required)"
+        required: false
+        type: string
+        default: ""
       extra_vars:
         description: "Extra -var flags passed to terraform plan (space-separated, non-sensitive only)"
         required: false
@@ -81,6 +91,34 @@ jobs:
         env:
           _val: ${{ steps.sm.outputs.ingest_token }}
         run: echo "TF_VAR_ingest_token=$_val" >> "$GITHUB_ENV"
+
+      - name: Fetch firmware_check_token from Secret Manager
+        if: inputs.firmware_check_token_sm_secret != ''
+        id: sm_firmware
+        uses: google-github-actions/get-secretmanager-secrets@v2
+        with:
+          secrets: |
+            firmware_check_token:${{ steps.gcp.outputs.project_id }}/${{ inputs.firmware_check_token_sm_secret }}
+
+      - name: Export firmware_check_token as TF var
+        if: inputs.firmware_check_token_sm_secret != '' && steps.sm_firmware.outputs.firmware_check_token != ''
+        env:
+          _val: ${{ steps.sm_firmware.outputs.firmware_check_token }}
+        run: echo "TF_VAR_firmware_check_token=$_val" >> "$GITHUB_ENV"
+
+      - name: Fetch device_logs_token from Secret Manager
+        if: inputs.device_logs_token_sm_secret != ''
+        id: sm_device_logs
+        uses: google-github-actions/get-secretmanager-secrets@v2
+        with:
+          secrets: |
+            device_logs_token:${{ steps.gcp.outputs.project_id }}/${{ inputs.device_logs_token_sm_secret }}
+
+      - name: Export device_logs_token as TF var
+        if: inputs.device_logs_token_sm_secret != '' && steps.sm_device_logs.outputs.device_logs_token != ''
+        env:
+          _val: ${{ steps.sm_device_logs.outputs.device_logs_token }}
+        run: echo "TF_VAR_device_logs_token=$_val" >> "$GITHUB_ENV"
 
       - name: Terraform Init
         working-directory: ${{ inputs.working_directory }}

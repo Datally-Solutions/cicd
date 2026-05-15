@@ -49,11 +49,12 @@ jobs:
 
       - name: Generate and upload latest.json
         run: |
+          SHA256=$(sha256sum firmware.bin | awk '{print $1}')
           cat > latest.json << EOF
           {
             "version": "${{ inputs.version }}",
-            "url": "https://storage.googleapis.com/${{ env.FIRMWARE_BUCKET }}/latest/firmware.bin",
-            "built_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            "built_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "sha256": "${SHA256}"
           }
           EOF
           gsutil cp latest.json gs://${{ env.FIRMWARE_BUCKET }}/latest.json
