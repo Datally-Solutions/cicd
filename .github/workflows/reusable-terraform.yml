@@ -123,12 +123,13 @@ jobs:
       - name: Terraform Init
         working-directory: ${{ inputs.working_directory }}
         env:
+          STATE_PREFIX: ${{ inputs.state_prefix }}
           TF_VAR_GCP_PROJECT_ID: ${{ steps.gcp.outputs.project_id }}
           TF_VAR_GCP_REGION: ${{ env.GCP_REGION }}
         run: |
           terraform init \
-            -backend-config="bucket=${{ env.TFSTATE_BUCKET }}" \
-            -backend-config="prefix=${{ inputs.state_prefix }}"
+            -backend-config="bucket=$TFSTATE_BUCKET" \
+            -backend-config="prefix=$STATE_PREFIX"
 
       - name: Terraform Format Check
         id: fmt
@@ -166,13 +167,18 @@ jobs:
       - name: Post Plan as PR Comment
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
+        env:
+          PLAN_WORKING_DIRECTORY: ${{ inputs.working_directory }}
+          STATE_PREFIX: ${{ inputs.state_prefix }}
         with:
           script: |
             const fs = require('fs');
-            const plan = fs.readFileSync('${{ inputs.working_directory }}/plan_output.txt', 'utf8');
+            const path = require('path');
+            const planPath = path.join(process.env.PLAN_WORKING_DIRECTORY, 'plan_output.txt');
+            const plan = fs.readFileSync(planPath, 'utf8');
             const truncated = plan.length > 60000 ? plan.substring(0, 60000) + '\n... (truncated)' : plan;
             const icon = (outcome) => outcome === 'success' ? '✅' : outcome === 'failure' ? '❌' : '⚠️';
-            const body = `## Terraform Plan — \`${{ inputs.state_prefix }}\`
+            const body = `## Terraform Plan — \`${process.env.STATE_PREFIX}\`
 
             | Step | Result |
             |------|--------|

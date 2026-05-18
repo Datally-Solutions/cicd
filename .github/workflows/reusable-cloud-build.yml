@@ -36,9 +36,14 @@ jobs:
       - uses: google-github-actions/setup-gcloud@v2
 
       - name: Submit Cloud Build
+        env:
+          CONFIG_PATH: ${{ inputs.config_path }}
+          GCP_PROJECT_ID: ${{ steps.gcp.outputs.project_id }}
+          REGION: ${{ inputs.region }}
+          SHORT_SHA: ${{ inputs.short_sha }}
         run: |
           gcloud builds submit . \
-            --config=${{ inputs.config_path }} \
-            --project=${{ steps.gcp.outputs.project_id }} \
-            --region=${{ inputs.region }} \
-            --substitutions=SHORT_SHA=${{ inputs.short_sha }}
+            --config="$CONFIG_PATH" \
+            --project="$GCP_PROJECT_ID" \
+            --region="$REGION" \
+            --substitutions="SHORT_SHA=$SHORT_SHA"
