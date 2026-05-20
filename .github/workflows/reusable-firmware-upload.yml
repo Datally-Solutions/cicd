@@ -48,13 +48,30 @@ jobs:
                  gs://${{ env.FIRMWARE_BUCKET }}/latest/firmware.bin
 
       - name: Generate and upload latest.json
+        env:
+          FIRMWARE_URL: https://storage.googleapis.com/${{ env.FIRMWARE_BUCKET }}/latest/firmware.bin
+          VERSION: ${{ inputs.version }}
         run: |
-          SHA256=$(sha256sum firmware.bin | awk '{print $1}')
-          cat > latest.json << EOF
-          {
-            "version": "${{ inputs.version }}",
-            "built_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-            "sha256": "${SHA256}"
+          python3 - <<'PY'
+          import datetime
+          import hashlib
+          import json
+          import os
+
+          digest = hashlib.sha256()
+          with open("firmware.bin", "rb") as firmware:
+              for chunk in iter(lambda: firmware.read(1024 * 1024), b""):
+                  digest.update(chunk)
+
+          metadata = {
+              "version": os.environ["VERSION"],
+              "url": os.environ["FIRMWARE_URL"],
+              "built_at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+              "sha256": digest.hexdigest(),
           }
-          EOF
+
+          with open("latest.json", "w", encoding="utf-8") as manifest:
+              json.dump(metadata, manifest, indent=2)
+              manifest.write("\n")
+          PY
           gsutil cp latest.json gs://${{ env.FIRMWARE_BUCKET }}/latest.json
