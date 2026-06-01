@@ -152,6 +152,7 @@ jobs:
           TF_VAR_alert_email: ${{ env.ALERT_EMAIL }}
           EXTRA_VARS: ${{ inputs.extra_vars }}
         run: |
+          set -o pipefail
           extra_args=()
           if [[ -n "$EXTRA_VARS" ]]; then
             read -ra extra_args <<< "$EXTRA_VARS"
