@@ -16,6 +16,11 @@ on:
         required: false
         type: string
         default: "production"
+      has_tfvars:
+        description: "Whether to write TF_VARS secret to terraform.tfvars"
+        required: false
+        type: boolean
+        default: true
       ingest_token_sm_secret:
         description: "SM secret name for TF_VAR_ingest_token (leave empty if not required)"
         required: false
@@ -41,6 +46,9 @@ on:
         required: false
         type: string
         default: "1.10.3"
+    secrets:
+      TF_VARS:
+        required: false
 
 permissions:
   contents: read
@@ -77,6 +85,13 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ inputs.terraform_version }}
+
+      - name: Write tfvars
+        if: inputs.has_tfvars
+        env:
+          WORKING_DIR: ${{ inputs.working_directory }}
+          TF_VARS_CONTENT: ${{ secrets.TF_VARS }}
+        run: printf '%s\n' "$TF_VARS_CONTENT" > "$WORKING_DIR/terraform.tfvars"
 
       - name: Fetch ingest_token from Secret Manager
         if: inputs.ingest_token_sm_secret != ''
@@ -220,3 +235,9 @@ jobs:
           TF_VAR_GCP_REGION: ${{ env.GCP_REGION }}
           TF_VAR_alert_email: ${{ env.ALERT_EMAIL }}
         run: terraform apply -auto-approve tfplan
+
+      - name: Cleanup tfvars
+        if: always() && inputs.has_tfvars
+        env:
+          WORKING_DIR: ${{ inputs.working_directory }}
+        run: rm -f "$WORKING_DIR/terraform.tfvars"
