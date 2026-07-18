@@ -15,7 +15,7 @@ A parameterised Terraform plan + apply workflow called by both `backend` and `in
 | `working_directory` | string | yes | Path to Terraform root (e.g. `.`) |
 | `state_prefix` | string | yes | GCS state prefix (e.g. `infra`, `backend`) |
 | `environment` | string | no | GitHub environment (default: `production`) |
-| `has_tfvars` | boolean | no | Write `TF_VARS` secret to `terraform.tfvars` (default: `true`) |
+| `has_tfvars` | string | no | Write `TF_VARS` secret to `terraform.tfvars` when set to `"true"` (default: `"true"`) |
 | `extra_vars` | string | no | Space-separated `-var key=value` flags for `terraform plan` |
 | `terraform_version` | string | no | Terraform version to install (default: `1.10.3`) |
 
