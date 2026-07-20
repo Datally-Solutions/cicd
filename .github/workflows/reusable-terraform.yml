@@ -36,6 +36,11 @@ on:
         required: false
         type: string
         default: ""
+      provisioning_token_sm_secret:
+        description: "SM secret name for TF_VAR_provisioning_token (leave empty if not required)"
+        required: false
+        type: string
+        default: ""
       extra_vars:
         description: "Extra -var flags passed to terraform plan (space-separated, non-sensitive only)"
         required: false
@@ -134,6 +139,20 @@ jobs:
         env:
           _val: ${{ steps.sm_device_logs.outputs.device_logs_token }}
         run: echo "TF_VAR_device_logs_token=$_val" >> "$GITHUB_ENV"
+
+      - name: Fetch provisioning_token from Secret Manager
+        if: inputs.provisioning_token_sm_secret != ''
+        id: sm_provisioning
+        uses: google-github-actions/get-secretmanager-secrets@v2
+        with:
+          secrets: |
+            provisioning_token:${{ steps.gcp.outputs.project_id }}/${{ inputs.provisioning_token_sm_secret }}
+
+      - name: Export provisioning_token as TF var
+        if: inputs.provisioning_token_sm_secret != '' && steps.sm_provisioning.outputs.provisioning_token != ''
+        env:
+          _val: ${{ steps.sm_provisioning.outputs.provisioning_token }}
+        run: echo "TF_VAR_provisioning_token=$_val" >> "$GITHUB_ENV"
 
       - name: Terraform Init
         working-directory: ${{ inputs.working_directory }}
