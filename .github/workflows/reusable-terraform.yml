@@ -36,6 +36,11 @@ on:
         required: false
         type: string
         default: ""
+      provisioning_token_sm_secret:
+        description: "SM secret name for TF_VAR_provisioning_token (leave empty if not required)"
+        required: false
+        type: string
+        default: ""
       extra_vars:
         description: "Extra -var flags passed to terraform plan (space-separated, non-sensitive only)"
         required: false
@@ -105,7 +110,13 @@ jobs:
         if: inputs.ingest_token_sm_secret != '' && steps.sm.outputs.ingest_token != ''
         env:
           _val: ${{ steps.sm.outputs.ingest_token }}
-        run: echo "TF_VAR_ingest_token=$_val" >> "$GITHUB_ENV"
+        run: |
+          echo "::add-mask::$_val"
+          {
+            echo "TF_VAR_ingest_token<<EOF_INGEST_TOKEN"
+            echo "$_val"
+            echo "EOF_INGEST_TOKEN"
+          } >> "$GITHUB_ENV"
 
       - name: Fetch firmware_check_token from Secret Manager
         if: inputs.firmware_check_token_sm_secret != ''
@@ -119,7 +130,13 @@ jobs:
         if: inputs.firmware_check_token_sm_secret != '' && steps.sm_firmware.outputs.firmware_check_token != ''
         env:
           _val: ${{ steps.sm_firmware.outputs.firmware_check_token }}
-        run: echo "TF_VAR_firmware_check_token=$_val" >> "$GITHUB_ENV"
+        run: |
+          echo "::add-mask::$_val"
+          {
+            echo "TF_VAR_firmware_check_token<<EOF_FIRMWARE_CHECK_TOKEN"
+            echo "$_val"
+            echo "EOF_FIRMWARE_CHECK_TOKEN"
+          } >> "$GITHUB_ENV"
 
       - name: Fetch device_logs_token from Secret Manager
         if: inputs.device_logs_token_sm_secret != ''
@@ -133,7 +150,33 @@ jobs:
         if: inputs.device_logs_token_sm_secret != '' && steps.sm_device_logs.outputs.device_logs_token != ''
         env:
           _val: ${{ steps.sm_device_logs.outputs.device_logs_token }}
-        run: echo "TF_VAR_device_logs_token=$_val" >> "$GITHUB_ENV"
+        run: |
+          echo "::add-mask::$_val"
+          {
+            echo "TF_VAR_device_logs_token<<EOF_DEVICE_LOGS_TOKEN"
+            echo "$_val"
+            echo "EOF_DEVICE_LOGS_TOKEN"
+          } >> "$GITHUB_ENV"
+
+      - name: Fetch provisioning_token from Secret Manager
+        if: inputs.provisioning_token_sm_secret != ''
+        id: sm_provisioning
+        uses: google-github-actions/get-secretmanager-secrets@v2
+        with:
+          secrets: |
+            provisioning_token:${{ steps.gcp.outputs.project_id }}/${{ inputs.provisioning_token_sm_secret }}
+
+      - name: Export provisioning_token as TF var
+        if: inputs.provisioning_token_sm_secret != '' && steps.sm_provisioning.outputs.provisioning_token != ''
+        env:
+          _val: ${{ steps.sm_provisioning.outputs.provisioning_token }}
+        run: |
+          echo "::add-mask::$_val"
+          {
+            echo "TF_VAR_provisioning_token<<EOF_PROVISIONING_TOKEN"
+            echo "$_val"
+            echo "EOF_PROVISIONING_TOKEN"
+          } >> "$GITHUB_ENV"
 
       - name: Terraform Init
         working-directory: ${{ inputs.working_directory }}
