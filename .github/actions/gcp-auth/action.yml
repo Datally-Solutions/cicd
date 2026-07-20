@@ -6,6 +6,14 @@ inputs:
     description: "Format du token (access_token ou vide)"
     required: false
     default: ""
+  workload_identity_provider:
+    description: "WIF provider resource name. Defaults to the privileged provider (main/tags only)."
+    required: false
+    default: "projects/853335570767/locations/global/workloadIdentityPools/github-pool/providers/github-provider"
+  service_account:
+    description: "SA to impersonate. Defaults to the privileged terraform-cicd-sa."
+    required: false
+    default: "terraform-cicd-sa@cat-litter-monitor.iam.gserviceaccount.com"
 
 outputs:
   project_id:
@@ -22,5 +30,5 @@ runs:
       id: auth
       with:
         token_format: ${{ inputs.token_format }}
-        workload_identity_provider: "projects/853335570767/locations/global/workloadIdentityPools/github-pool/providers/github-provider"
-        service_account: "terraform-cicd-sa@cat-litter-monitor.iam.gserviceaccount.com"
+        workload_identity_provider: ${{ inputs.workload_identity_provider }}
+        service_account: ${{ inputs.service_account }}

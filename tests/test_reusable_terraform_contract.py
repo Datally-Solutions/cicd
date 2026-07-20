@@ -42,6 +42,42 @@ class ReusableTerraformContractTest(unittest.TestCase):
         self.assertIn("if: always() && inputs.has_tfvars == 'true'", self.workflow)
         self.assertIn("rm -f terraform.tfvars", self.workflow)
 
+    def test_pull_request_runs_use_the_readonly_plan_identity(self):
+        # Both branches must be explicit — a step's `with:` can't conditionally omit a key,
+        # and an empty string would override gcp-auth's own default instead of falling back
+        # to it (see gcp-auth/action.yml).
+        self.assertIn(
+            "workload_identity_provider: ${{ github.event_name == 'pull_request' && "
+            "'projects/853335570767/locations/global/workloadIdentityPools/"
+            "github-pool-readonly/providers/github-provider-readonly' || "
+            "'projects/853335570767/locations/global/workloadIdentityPools/"
+            "github-pool/providers/github-provider' }}",
+            self.workflow,
+        )
+        self.assertIn(
+            "service_account: ${{ github.event_name == 'pull_request' && "
+            "'terraform-plan-sa@cat-litter-monitor.iam.gserviceaccount.com' || "
+            "'terraform-cicd-sa@cat-litter-monitor.iam.gserviceaccount.com' }}",
+            self.workflow,
+        )
+
+    def test_pull_request_plan_does_not_take_a_state_lock(self):
+        # The read-only plan SA can't write the GCS lock object (storage.objects.create) —
+        # and a PR plan makes no state changes, so it doesn't need to hold the lock anyway.
+        self.assertIn('lock_arg="-lock=true"', self.workflow)
+        self.assertIn(
+            'if [[ "${{ github.event_name }}" == "pull_request" ]]; then', self.workflow
+        )
+        self.assertIn('lock_arg="-lock=false"', self.workflow)
+
+    def test_apply_still_requires_push_to_main(self):
+        # However the plan identity changes, apply must never run off a PR-computed plan.
+        self.assertIn(
+            "if: github.ref == 'refs/heads/main' && github.event_name == 'push'",
+            self.workflow,
+        )
+        self.assertIn("terraform apply -auto-approve tfplan", self.workflow)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -72,9 +72,19 @@ jobs:
       - name: Checkout calling repo
         uses: actions/checkout@v4
 
+      # PR runs (github.event_name == 'pull_request') get a read-only identity that can
+      # compute a plan but cannot create/update/delete anything — see infra/iam.tf
+      # (terraform_plan_sa / github-pool-readonly) for why this has to be a fully separate
+      # WIF pool, not just a less-restrictive provider next to the privileged one.
       - name: Authenticate to GCP
         id: gcp
         uses: Datally-Solutions/cicd/.github/actions/gcp-auth@main
+        with:
+          # A step's `with:` can't conditionally omit a key, and passing an empty string
+          # would override the action's own default rather than falling back to it — so
+          # both branches are spelled out explicitly here, not just the read-only one.
+          workload_identity_provider: ${{ github.event_name == 'pull_request' && 'projects/853335570767/locations/global/workloadIdentityPools/github-pool-readonly/providers/github-provider-readonly' || 'projects/853335570767/locations/global/workloadIdentityPools/github-pool/providers/github-provider' }}
+          service_account: ${{ github.event_name == 'pull_request' && 'terraform-plan-sa@cat-litter-monitor.iam.gserviceaccount.com' || 'terraform-cicd-sa@cat-litter-monitor.iam.gserviceaccount.com' }}
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -165,10 +175,18 @@ jobs:
           if [[ -n "$EXTRA_VARS" ]]; then
             read -ra extra_args <<< "$EXTRA_VARS"
           fi
+          # PR runs use the read-only plan SA, which deliberately can't write the GCS state
+          # lock object (storage.objects.create) — and doesn't need to: a PR plan makes no
+          # state changes, so there's nothing concurrent writers need protecting from here.
+          lock_arg="-lock=true"
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            lock_arg="-lock=false"
+          fi
           terraform plan \
             -input=false \
             -out=tfplan \
             -no-color \
+            "$lock_arg" \
             "${extra_args[@]}" \
             2>&1 | tee plan_output.txt
         continue-on-error: true
