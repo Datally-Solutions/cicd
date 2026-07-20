@@ -21,18 +21,8 @@ on:
         required: false
         type: string
         default: "true"
-      ingest_token_sm_secret:
-        description: "SM secret name for TF_VAR_ingest_token (leave empty if not required)"
-        required: false
-        type: string
-        default: ""
       firmware_check_token_sm_secret:
         description: "SM secret name for TF_VAR_firmware_check_token (leave empty if not required)"
-        required: false
-        type: string
-        default: ""
-      device_logs_token_sm_secret:
-        description: "SM secret name for TF_VAR_device_logs_token (leave empty if not required)"
         required: false
         type: string
         default: ""
@@ -98,26 +88,6 @@ jobs:
           TF_VARS_CONTENT: ${{ secrets.TF_VARS }}
         run: printf '%s\n' "$TF_VARS_CONTENT" > terraform.tfvars
 
-      - name: Fetch ingest_token from Secret Manager
-        if: inputs.ingest_token_sm_secret != ''
-        id: sm
-        uses: google-github-actions/get-secretmanager-secrets@v2
-        with:
-          secrets: |
-            ingest_token:${{ steps.gcp.outputs.project_id }}/${{ inputs.ingest_token_sm_secret }}
-
-      - name: Export ingest_token as TF var
-        if: inputs.ingest_token_sm_secret != '' && steps.sm.outputs.ingest_token != ''
-        env:
-          _val: ${{ steps.sm.outputs.ingest_token }}
-        run: |
-          echo "::add-mask::$_val"
-          {
-            echo "TF_VAR_ingest_token<<EOF_INGEST_TOKEN"
-            echo "$_val"
-            echo "EOF_INGEST_TOKEN"
-          } >> "$GITHUB_ENV"
-
       - name: Fetch firmware_check_token from Secret Manager
         if: inputs.firmware_check_token_sm_secret != ''
         id: sm_firmware
@@ -136,26 +106,6 @@ jobs:
             echo "TF_VAR_firmware_check_token<<EOF_FIRMWARE_CHECK_TOKEN"
             echo "$_val"
             echo "EOF_FIRMWARE_CHECK_TOKEN"
-          } >> "$GITHUB_ENV"
-
-      - name: Fetch device_logs_token from Secret Manager
-        if: inputs.device_logs_token_sm_secret != ''
-        id: sm_device_logs
-        uses: google-github-actions/get-secretmanager-secrets@v2
-        with:
-          secrets: |
-            device_logs_token:${{ steps.gcp.outputs.project_id }}/${{ inputs.device_logs_token_sm_secret }}
-
-      - name: Export device_logs_token as TF var
-        if: inputs.device_logs_token_sm_secret != '' && steps.sm_device_logs.outputs.device_logs_token != ''
-        env:
-          _val: ${{ steps.sm_device_logs.outputs.device_logs_token }}
-        run: |
-          echo "::add-mask::$_val"
-          {
-            echo "TF_VAR_device_logs_token<<EOF_DEVICE_LOGS_TOKEN"
-            echo "$_val"
-            echo "EOF_DEVICE_LOGS_TOKEN"
           } >> "$GITHUB_ENV"
 
       - name: Fetch provisioning_token from Secret Manager
