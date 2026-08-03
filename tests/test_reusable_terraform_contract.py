@@ -71,9 +71,11 @@ class ReusableTerraformContractTest(unittest.TestCase):
         self.assertIn('lock_arg="-lock=false"', self.workflow)
 
     def test_apply_still_requires_push_to_main(self):
-        # However the plan identity changes, apply must never run off a PR-computed plan.
+        # Apply must never run off a failed/skipped plan or a red job (custom `if`
+        # drops GHA's implicit success(); a stale checked-in tfplan must not apply).
         self.assertIn(
-            "if: github.ref == 'refs/heads/main' && github.event_name == 'push'",
+            "if: success() && github.ref == 'refs/heads/main' && "
+            "github.event_name == 'push' && steps.plan.outcome == 'success'",
             self.workflow,
         )
         self.assertIn("terraform apply -auto-approve tfplan", self.workflow)
