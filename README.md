@@ -54,7 +54,7 @@ This split is intentional and lives in [`infra/iam.tf`](https://github.com/Datal
 4. Posts a plan summary as a PR comment (fmt / validate / plan status + output)
 5. Fails the job if any of those steps failed
 6. Uploads the plan artifact on `main` (only when plan succeeds)
-7. Runs `terraform apply` on push to `main`
+7. Runs `terraform apply` on push to `main` only when `success()` and `steps.plan.outcome == 'success'` (a custom `if` drops GHA’s implicit success check — without both gates a failed plan can still apply a stale checked-in `tfplan`)
 8. Cleans up `terraform.tfvars` in a final `if: always()` step
 
 ### Other reusable workflows
@@ -72,6 +72,7 @@ These use the privileged `gcp-auth` defaults (`terraform-cicd-sa`). Callers that
 - GCP auth uses Workload Identity Federation — no service account JSON keys in GitHub secrets
 - Privileged WIF is restricted to trusted refs in the `Datally-Solutions` org; fork PRs cannot obtain credentials
 - PR Terraform plans use a separate read-only pool + SA (cannot apply)
+- Apply on `main` is gated on `success()` and a successful plan outcome (same contract as the plan-artifact upload)
 - `extra_vars` is passed via an env var and expanded as a bash array to prevent shell injection
 - `working_directory` is passed via env var in shell steps to prevent path injection
 - `terraform.tfvars` uses `printf` of a secret env var; SM-fetched tokens are masked with `::add-mask::`
