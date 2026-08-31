@@ -80,6 +80,66 @@ class ReusableTerraformContractTest(unittest.TestCase):
         )
         self.assertIn("terraform apply -auto-approve tfplan", self.workflow)
 
+    def test_sm_token_inputs_are_optional_named_secrets(self):
+        # Callers pass SM *names* only; values come from Secret Manager after WIF auth.
+        # Empty default keeps repos that don't need these tokens working.
+        self.assertRegex(
+            self.workflow,
+            re.compile(
+                r"^\s{6}firmware_check_token_sm_secret:\n"
+                r"\s{8}description: .+\n"
+                r"\s{8}required: false\n"
+                r"\s{8}type: string\n"
+                r"\s{8}default: \"\"$",
+                re.MULTILINE,
+            ),
+        )
+        self.assertRegex(
+            self.workflow,
+            re.compile(
+                r"^\s{6}provisioning_token_sm_secret:\n"
+                r"\s{8}description: .+\n"
+                r"\s{8}required: false\n"
+                r"\s{8}type: string\n"
+                r"\s{8}default: \"\"$",
+                re.MULTILINE,
+            ),
+        )
+
+    def test_sm_tokens_are_fetched_and_exported_as_tf_vars(self):
+        # Without these steps, plan/apply silently miss TF_VAR_* tokens and leave
+        # Cloud Run / firmware check using empty or stale secret versions.
+        self.assertIn("if: inputs.firmware_check_token_sm_secret != ''", self.workflow)
+        self.assertIn(
+            "firmware_check_token:${{ steps.gcp.outputs.project_id }}/"
+            "${{ inputs.firmware_check_token_sm_secret }}",
+            self.workflow,
+        )
+        self.assertIn("TF_VAR_firmware_check_token<<EOF_FIRMWARE_CHECK_TOKEN", self.workflow)
+
+        self.assertIn("if: inputs.provisioning_token_sm_secret != ''", self.workflow)
+        self.assertIn(
+            "provisioning_token:${{ steps.gcp.outputs.project_id }}/"
+            "${{ inputs.provisioning_token_sm_secret }}",
+            self.workflow,
+        )
+        self.assertIn("TF_VAR_provisioning_token<<EOF_PROVISIONING_TOKEN", self.workflow)
+
+        # Mask before writing to GITHUB_ENV so tokens do not leak in logs.
+        self.assertIn('echo "::add-mask::$_val"', self.workflow)
+
+    def test_workflow_does_not_plumb_retired_shared_device_tokens(self):
+        # JWT/Pub-Sub migration retired ingest_token and device_logs_token. Reintroducing
+        # them here would resurrect a shared-secret auth path that no longer exists
+        # server-side and confuse callers into shipping dead credentials.
+        for banned in (
+            "ingest_token",
+            "device_logs_token",
+            "TF_VAR_ingest_token",
+            "TF_VAR_device_logs_token",
+        ):
+            self.assertNotIn(banned, self.workflow)
+
 
 if __name__ == "__main__":
     unittest.main()
