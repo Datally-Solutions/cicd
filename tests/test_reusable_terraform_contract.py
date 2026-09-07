@@ -141,5 +141,43 @@ class ReusableTerraformContractTest(unittest.TestCase):
             self.assertNotIn(banned, self.workflow)
 
 
+GCP_AUTH = Path(__file__).resolve().parents[1] / ".github" / "actions" / "gcp-auth" / "action.yml"
+WORKFLOWS_DIR = Path(__file__).resolve().parents[1] / ".github" / "workflows"
+
+
+class GcpAuthAndWorkflowContractTest(unittest.TestCase):
+    def test_gcp_auth_defaults_to_privileged_identity(self):
+        # Non-terraform reusables omit provider/SA overrides; empty defaults would
+        # silently fail auth, and a readonly default would break apply/deploy jobs.
+        action = GCP_AUTH.read_text(encoding="utf-8")
+        self.assertIn(
+            "default: \"projects/853335570767/locations/global/workloadIdentityPools/"
+            "github-pool/providers/github-provider\"",
+            action,
+        )
+        self.assertIn(
+            "default: \"terraform-cicd-sa@cat-litter-monitor.iam.gserviceaccount.com\"",
+            action,
+        )
+        self.assertNotIn("github-pool-readonly", action)
+        self.assertNotIn("terraform-plan-sa", action)
+
+    def test_no_workflow_plumbs_retired_shared_device_tokens(self):
+        banned = (
+            "ingest_token",
+            "device_logs_token",
+            "TF_VAR_ingest_token",
+            "TF_VAR_device_logs_token",
+        )
+        for path in sorted(WORKFLOWS_DIR.glob("*.yml")):
+            text = path.read_text(encoding="utf-8")
+            for token in banned:
+                self.assertNotIn(
+                    token,
+                    text,
+                    msg=f"{path.name} must not reference retired token {token}",
+                )
+
+
 if __name__ == "__main__":
     unittest.main()
