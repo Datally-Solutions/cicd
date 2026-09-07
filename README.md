@@ -73,6 +73,7 @@ These use the privileged `gcp-auth` defaults (`terraform-cicd-sa`). Callers that
 - Privileged WIF is restricted to trusted refs in the `Datally-Solutions` org; fork PRs cannot obtain credentials
 - PR Terraform plans use a separate read-only pool + SA (cannot apply)
 - Apply on `main` is gated on `success()` and a successful plan outcome (same contract as the plan-artifact upload)
+- SM-backed TF inputs are **only** `firmware_check_token_sm_secret` and `provisioning_token_sm_secret`. Shared `ingest_token` / `device_logs_token` plumbing was retired with the JWT/Pub-Sub device path — do not reintroduce those names (or `TF_VAR_ingest_token` / `TF_VAR_device_logs_token`) into this workflow
 - `extra_vars` is passed via an env var and expanded as a bash array to prevent shell injection
 - `working_directory` is passed via env var in shell steps to prevent path injection
 - `terraform.tfvars` uses `printf` of a secret env var; SM-fetched tokens are masked with `::add-mask::`
