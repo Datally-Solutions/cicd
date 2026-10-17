@@ -173,7 +173,10 @@ jobs:
           set -o pipefail
           extra_args=()
           if [[ -n "$EXTRA_VARS" ]]; then
-            read -ra extra_args <<< "$EXTRA_VARS"
+            # Callers build extra_vars from several ${{ }} lines (e.g. backend: api + gateway
+            # image tags), so it can contain newlines. Plain `read -ra` stops at the first
+            # one and silently dropped every flag after it; -d '' reads the whole string.
+            read -r -d '' -a extra_args <<< "$EXTRA_VARS" || true
           fi
           # PR runs use the read-only plan SA, which deliberately can't write the GCS state
           # lock object (storage.objects.create) — and doesn't need to: a PR plan makes no
