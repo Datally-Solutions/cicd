@@ -173,7 +173,7 @@ jobs:
           set -o pipefail
           extra_args=()
           if [[ -n "$EXTRA_VARS" ]]; then
-            # Callers build extra_vars from several ${{ }} lines (e.g. backend: api + gateway
+            # Callers build extra_vars from several expression lines (e.g. backend: api + gateway
             # image tags), so it can contain newlines. Plain `read -ra` stops at the first
             # one and silently dropped every flag after it; -d '' reads the whole string.
             read -r -d '' -a extra_args <<< "$EXTRA_VARS" || true
