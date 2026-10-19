@@ -78,6 +78,17 @@ class ReusableTerraformContractTest(unittest.TestCase):
             "github.event_name == 'push' && steps.plan.outcome == 'success'",
             self.workflow,
         )
+
+    def test_extra_vars_reads_all_lines_not_just_the_first(self):
+        # Callers (e.g. backend) build extra_vars from several expression lines, so the
+        # value can contain newlines. Plain `read -ra` stops at the first newline and
+        # silently drops every -var after it (e.g. gateway image tag never applied).
+        self.assertIn("EXTRA_VARS: ${{ inputs.extra_vars }}", self.workflow)
+        self.assertIn("read -r -d '' -a extra_args <<< \"$EXTRA_VARS\" || true", self.workflow)
+        self.assertNotRegex(
+            self.workflow,
+            re.compile(r"^\s*read -ra extra_args <<< \"\$EXTRA_VARS\"\s*$", re.MULTILINE),
+        )
         self.assertIn("terraform apply -auto-approve tfplan", self.workflow)
 
     def test_sm_token_inputs_are_optional_named_secrets(self):
