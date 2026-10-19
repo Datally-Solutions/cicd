@@ -18,7 +18,7 @@ A parameterised Terraform plan + apply workflow called by both `backend` and `in
 | `has_tfvars` | string | no | Write `TF_VARS` secret to `terraform.tfvars` when set to `"true"` (default: `"true"`) |
 | `firmware_check_token_sm_secret` | string | no | Secret Manager secret name; when set, value is exported as `TF_VAR_firmware_check_token` |
 | `provisioning_token_sm_secret` | string | no | Secret Manager secret name; when set, value is exported as `TF_VAR_provisioning_token` |
-| `extra_vars` | string | no | Space-separated `-var key=value` flags for `terraform plan` (non-sensitive only) |
+| `extra_vars` | string | no | `-var key=value` flags for `terraform plan` (non-sensitive only). Space- **or newline**-separated — callers often build this from several `${{ }}` expression lines (e.g. backend API + gateway image tags) |
 | `terraform_version` | string | no | Terraform version to install (default: `1.10.3`) |
 
 **Secrets** (passed via `secrets: inherit` from the calling workflow):
@@ -74,7 +74,7 @@ These use the privileged `gcp-auth` defaults (`terraform-cicd-sa`). Callers that
 - PR Terraform plans use a separate read-only pool + SA (cannot apply)
 - Apply on `main` is gated on `success()` and a successful plan outcome (same contract as the plan-artifact upload)
 - SM-backed TF inputs are **only** `firmware_check_token_sm_secret` and `provisioning_token_sm_secret`. Shared `ingest_token` / `device_logs_token` plumbing was retired with the JWT/Pub-Sub device path — do not reintroduce those names (or `TF_VAR_ingest_token` / `TF_VAR_device_logs_token`) into this workflow
-- `extra_vars` is passed via an env var and expanded as a bash array to prevent shell injection
+- `extra_vars` is passed via an env var and expanded as a bash array to prevent shell injection. Parsing must use `read -r -d '' -a` (with `|| true`): plain `read -ra` stops at the first newline and silently drops every flag after it — that is how `gateway_image_tag` never reached plan while deploys stayed green (`#20`)
 - `working_directory` is passed via env var in shell steps to prevent path injection
 - `terraform.tfvars` uses `printf` of a secret env var; SM-fetched tokens are masked with `::add-mask::`
 
