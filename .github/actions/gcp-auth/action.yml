@@ -26,7 +26,7 @@ outputs:
 runs:
   using: composite
   steps:
-    - uses: google-github-actions/auth@v2
+    - uses: google-github-actions/auth@v3
       id: auth
       with:
         token_format: ${{ inputs.token_format }}
