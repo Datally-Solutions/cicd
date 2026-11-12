@@ -70,7 +70,7 @@ jobs:
 
     steps:
       - name: Checkout calling repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # PR runs (github.event_name == 'pull_request') get a read-only identity that can
       # compute a plan but cannot create/update/delete anything — see infra/iam.tf
@@ -87,7 +87,7 @@ jobs:
           service_account: ${{ github.event_name == 'pull_request' && 'terraform-plan-sa@cat-litter-monitor.iam.gserviceaccount.com' || 'terraform-cicd-sa@cat-litter-monitor.iam.gserviceaccount.com' }}
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: ${{ inputs.terraform_version }}
 
@@ -101,7 +101,7 @@ jobs:
       - name: Fetch firmware_check_token from Secret Manager
         if: inputs.firmware_check_token_sm_secret != ''
         id: sm_firmware
-        uses: google-github-actions/get-secretmanager-secrets@v2
+        uses: google-github-actions/get-secretmanager-secrets@v3
         with:
           secrets: |
             firmware_check_token:${{ steps.gcp.outputs.project_id }}/${{ inputs.firmware_check_token_sm_secret }}
@@ -121,7 +121,7 @@ jobs:
       - name: Fetch provisioning_token from Secret Manager
         if: inputs.provisioning_token_sm_secret != ''
         id: sm_provisioning
-        uses: google-github-actions/get-secretmanager-secrets@v2
+        uses: google-github-actions/get-secretmanager-secrets@v3
         with:
           secrets: |
             provisioning_token:${{ steps.gcp.outputs.project_id }}/${{ inputs.provisioning_token_sm_secret }}
@@ -196,7 +196,7 @@ jobs:
 
       - name: Post Plan as PR Comment
         if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           PLAN_WORKING_DIRECTORY: ${{ inputs.working_directory }}
           STATE_PREFIX: ${{ inputs.state_prefix }}
@@ -235,7 +235,7 @@ jobs:
 
       - name: Upload plan artifact
         if: github.ref == 'refs/heads/main' && steps.plan.outcome == 'success'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tfplan-${{ inputs.state_prefix }}
           path: ${{ inputs.working_directory }}/tfplan
